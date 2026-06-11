@@ -1,5 +1,14 @@
+import { HttpError } from 'http-errors';
+
 export const errorHandler = (err, req, res, next) => {
   console.error(err);
+
+  if (err instanceof HttpError) {
+    res.status(err.status).json({
+      message: err.message,
+    });
+    return;
+  }
 
   const isProd = process.env.NODE_ENV === 'production';
 
