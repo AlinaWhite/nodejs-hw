@@ -3,7 +3,11 @@ import bcrypt from 'bcrypt';
 
 import { User } from '../models/user.js';
 import { Session } from '../models/session.js';
-import { createSession, setSessionCookies } from '../services/auth.js';
+import {
+  createSession,
+  setSessionCookies,
+  clearSessionCookies,
+} from '../services/auth.js';
 
 export const registerUser = async (req, res) => {
   const { email, password } = req.body;
@@ -45,13 +49,11 @@ export const loginUser = async (req, res) => {
   await Session.deleteOne({ userId: user._id });
 
   const session = await createSession(user._id);
-
   setSessionCookies(res, session);
 
-  res.status(200).json({
-    accessToken: session.accessToken,
-  });
+  res.status(200).json(user);
 };
+
 export const refreshUserSession = async (req, res) => {
   const { sessionId, refreshToken } = req.cookies;
 
@@ -65,16 +67,29 @@ export const refreshUserSession = async (req, res) => {
   }
 
   if (new Date() > session.refreshTokenValidUntil) {
+    await Session.deleteOne({ _id: sessionId });
+    clearSessionCookies(res);
     throw createHttpError(401, 'Session token expired');
   }
 
   await Session.deleteOne({ _id: sessionId });
 
   const newSession = await createSession(session.userId);
-
   setSessionCookies(res, newSession);
 
   res.status(200).json({
     message: 'Session refreshed',
   });
+};
+
+export const logoutUser = async (req, res) => {
+  const { sessionId } = req.cookies;
+
+  if (sessionId) {
+    await Session.deleteOne({ _id: sessionId });
+  }
+
+  clearSessionCookies(res);
+
+  res.status(204).send();
 };
