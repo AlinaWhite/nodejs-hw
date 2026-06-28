@@ -1,95 +1,39 @@
 import createHttpError from 'http-errors';
-import bcrypt from 'bcrypt';
 
-import { User } from '../models/user.js';
 import { Session } from '../models/session.js';
-import {
-  createSession,
-  setSessionCookies,
-  clearSessionCookies,
-} from '../services/auth.js';
+import { User } from '../models/user.js';
 
-export const registerUser = async (req, res) => {
-  const { email, password } = req.body;
+export const authenticate = async (req, res, next) => {
+  const { accessToken, sessionId } = req.cookies;
 
-  const existingUser = await User.findOne({ email });
-
-  if (existingUser) {
-    throw createHttpError(400, 'Email in use');
+  if (!accessToken) {
+    throw createHttpError(401, 'Missing access token');
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const user = await User.create({
-    email,
-    password: hashedPassword,
-  });
-
-  const session = await createSession(user._id);
-  setSessionCookies(res, session);
-
-  res.status(201).json(user);
-};
-
-export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User.findOne({ email });
-
-  if (!user) {
-    throw createHttpError(401, 'Invalid credentials');
+  if (!sessionId) {
+    throw createHttpError(401, 'Missing session id');
   }
-
-  const isPasswordCorrect = await bcrypt.compare(password, user.password);
-
-  if (!isPasswordCorrect) {
-    throw createHttpError(401, 'Invalid credentials');
-  }
-
-  await Session.deleteOne({ userId: user._id });
-
-  const session = await createSession(user._id);
-  setSessionCookies(res, session);
-
-  res.status(200).json(user);
-};
-
-export const refreshUserSession = async (req, res) => {
-  const { sessionId, refreshToken } = req.cookies;
 
   const session = await Session.findOne({
     _id: sessionId,
-    refreshToken,
+    accessToken,
   });
 
   if (!session) {
     throw createHttpError(401, 'Session not found');
   }
 
-  if (new Date() > session.refreshTokenValidUntil) {
-    await Session.deleteOne({ _id: sessionId });
-    clearSessionCookies(res);
-    throw createHttpError(401, 'Session token expired');
+  if (new Date() > session.accessTokenValidUntil) {
+    throw createHttpError(401, 'Access token expired');
   }
 
-  await Session.deleteOne({ _id: sessionId });
+  const user = await User.findById(session.userId);
 
-  const newSession = await createSession(session.userId);
-  setSessionCookies(res, newSession);
-
-  res.status(200).json({
-    message: 'Session refreshed',
-  });
-};
-
-export const logoutUser = async (req, res) => {
-  const { sessionId } = req.cookies;
-
-  if (sessionId) {
-    await Session.deleteOne({ _id: sessionId });
+  if (!user) {
+    throw createHttpError(401);
   }
 
-  clearSessionCookies(res);
+  req.user = user;
 
-  res.status(204).send();
+  next();
 };
