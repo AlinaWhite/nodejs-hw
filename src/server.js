@@ -4,6 +4,7 @@ import cors from 'cors';
 import notesRouter from './routes/notesRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import cookieParser from 'cookie-parser';
+import userRoutes from './routes/userRoutes.js';
 
 import { connectMongoDB } from './db/connectMongoDB.js';
 import { logger } from './middleware/logger.js';
@@ -21,6 +22,7 @@ app.use(cookieParser());
 
 app.use(notesRouter);
 app.use(authRoutes);
+app.use(userRoutes);
 app.use(notFoundHandler);
 app.use(errors());
 app.use(errorHandler);
